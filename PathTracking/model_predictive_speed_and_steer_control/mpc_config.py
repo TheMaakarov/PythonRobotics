@@ -33,6 +33,11 @@ class VehicleConfig:
     MAX_SPEED: float = 55.0 / 3.6  # [m/s]
     MIN_SPEED: float = -20.0 / 3.6  # [m/s]
     MAX_ACCEL: float = 1.0  # [m/s²]
+    
+@dataclass
+class SimulationConfig:
+    SHOW_ANIMATION: bool = True  # Show animation
 
 default_algorithm_config = AlgorithmConfig()
 default_vehicle_config = VehicleConfig()
+default_simulation_config = SimulationConfig()
