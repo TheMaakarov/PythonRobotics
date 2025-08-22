@@ -1,4 +1,5 @@
 import numpy as np
+import numpy.typing as npt
 from dataclasses import dataclass
 
 @dataclass
@@ -6,10 +7,10 @@ class AlgorithmConfig:
     NX: int = 4  # State dimension
     NU: int = 2  # Actions dimension
     T: int = 5  # Horizon length
-    R: np.ndarray = np.diag([0.01, 0.01])  # Input cost matrix
-    Rd: np.ndarray = np.diag([0.01, 1.0])  # Input difference cost matrix
-    Q: np.ndarray = np.diag([1.0, 1.0, 0.5, 0.5])  # State cost matrix
-    Qf: np.ndarray = Q  # State final matrix
+    R: npt.NDArray[np.float64] = np.diag([0.01, 0.01])  # Input cost matrix
+    Rd: npt.NDArray[np.float64] = np.diag([0.01, 1.0])  # Input difference cost matrix
+    Q: npt.NDArray[np.float64] = np.diag([1.0, 1.0, 0.5, 0.5])  # State cost matrix
+    Qf: npt.NDArray[np.float64] = Q  # State final matrix
     GOAL_DIS: float = 1.5  # Goal distance to consider 'reached' [m]
     STOP_SPEED: float = 0.5 / 3.6  # [m/s]
     MAX_TIME: float = 500.0  # Maximum simulation time [s]
@@ -37,7 +38,12 @@ class VehicleConfig:
 @dataclass
 class SimulationConfig:
     SHOW_ANIMATION: bool = True  # Show animation
+    DETECTION_DISTANCE = 20.0 # [m]
+    COURSE_TICK = 1.0  # [m] Course tick for path provider
 
-default_algorithm_config = AlgorithmConfig()
-default_vehicle_config = VehicleConfig()
-default_simulation_config = SimulationConfig()
+
+@dataclass
+class MpcConfig:
+    algorithm: AlgorithmConfig
+    vehicle: VehicleConfig
+    simulation: SimulationConfig

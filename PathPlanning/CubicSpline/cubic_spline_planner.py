@@ -375,7 +375,9 @@ class CubicSpline2D:
         return yaw
 
 
-def calc_spline_course(x, y, ds=0.1):
+def calc_spline_course(x, y, ds=0.1) -> \
+    tuple[list[float], list[float], list[float], list[float], list[float]]:
+    
     sp = CubicSpline2D(x, y)
     s = list(np.arange(0, sp.s[-1], ds))
 

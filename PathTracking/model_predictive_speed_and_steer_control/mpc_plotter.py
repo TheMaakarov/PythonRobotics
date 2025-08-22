@@ -4,8 +4,9 @@ import numpy as np
 import math
 
 from mpc_config import VehicleConfig
+from geometry import State
 
-def init_plot(cx, cy, t, x, y, v):
+def init_plot(cx, cy, t, x, y, v): 
     plt.close("all")
     plt.subplots()
     plt.plot(cx, cy, "-r", label="spline")
@@ -25,11 +26,15 @@ def init_plot(cx, cy, t, x, y, v):
     plt.show()
     
  
-def plot_state(vehicle_config: VehicleConfig, cx, cy, state, time, x, y, target_ind, xref, ox, oy, di):
+def plot_state(vehicle_config: VehicleConfig, cx, cy, state: State, time, x, y, target_ind, xref, ox, oy, di):
     plt.cla()
-            # for stopping simulation with the esc key.
-    plt.gcf().canvas.mpl_connect('key_release_event',
-                    lambda event: [exit(0) if event.key == 'escape' else None])
+    
+    # for stopping simulation with the esc key.
+    plt.gcf().canvas.mpl_connect(
+        'key_release_event',
+        lambda event: [exit(0) if getattr(event, "key", None) == 'escape' else None]
+    )
+    
     if ox is not None:
         plt.plot(ox, oy, "xr", label="MPC")
     plt.plot(cx, cy, "-r", label="course")

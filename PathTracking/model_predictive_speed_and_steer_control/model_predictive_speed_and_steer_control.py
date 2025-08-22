@@ -6,72 +6,19 @@ author: Atsushi Sakai (@Atsushi_twi)
 
 """
 import time
-import cvxpy
 import math
 import numpy as np
 import sys
 import pathlib
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
-from utils.angle import angle_mod
-
 from PathPlanning.CubicSpline import cubic_spline_planner
 
 from mpc_plotter import init_plot, plot_state
-
-show_animation = True
-
-def pi_2_pi(angle):
-    return angle_mod(angle)
-
-
-def get_nparray_from_matrix(x):
-    return np.array(x).flatten()
-
-
-def calc_speed_profile(cx, cy, cyaw, target_speed):
-
-    speed_profile = [target_speed] * len(cx)
-    direction = 1.0  # forward
-
-    # Set stop point
-    for i in range(len(cx) - 1):
-        dx = cx[i + 1] - cx[i]
-        dy = cy[i + 1] - cy[i]
-
-        move_direction = math.atan2(dy, dx)
-
-        if dx != 0.0 and dy != 0.0:
-            dangle = abs(pi_2_pi(move_direction - cyaw[i]))
-            if dangle >= math.pi / 4.0:
-                direction = -1.0
-            else:
-                direction = 1.0
-
-        if direction != 1.0:
-            speed_profile[i] = - target_speed
-        else:
-            speed_profile[i] = target_speed
-
-    speed_profile[-1] = 0.0
-
-    return speed_profile
-
-
-def smooth_yaw(yaw):
-
-    for i in range(len(yaw) - 1):
-        dyaw = yaw[i + 1] - yaw[i]
-
-        while dyaw >= math.pi / 2.0:
-            yaw[i + 1] -= math.pi * 2.0
-            dyaw = yaw[i + 1] - yaw[i]
-
-        while dyaw <= -math.pi / 2.0:
-            yaw[i + 1] += math.pi * 2.0
-            dyaw = yaw[i + 1] - yaw[i]
-
-    return yaw
+from mpc_controller import MPCController
+import mpc_config as conf
+from path_provider import StaticPathProvider
+from geometry import Route, State, SplinePoint
 
 
 def get_straight_course(dl):
@@ -131,10 +78,7 @@ def get_switch_back_course(dl):
 
 
 def main():
-    print(__file__ + " start!!")
-    start = time.time()
-
-    dl = 1.0  # course tick
+    """
     # cx, cy, cyaw, ck = get_straight_course(dl)
     # cx, cy, cyaw, ck = get_straight_course2(dl)
     # cx, cy, cyaw, ck = get_straight_course3(dl)
@@ -153,8 +97,50 @@ def main():
 
     if show_animation:  # pragma: no cover
         init_plot(cx, cy, t, x, y, v)
+    """
+    print(__file__ + " start!!")
+    start = time.time()
+
+    dl = 1.0  # course tick
+    alg_conf = conf.AlgorithmConfig()
+    vehicle_conf = conf.VehicleConfig(MAX_STEER=np.deg2rad(60.0), MAX_DSTEER=np.deg2rad(45.0))
+    sim_conf = conf.SimulationConfig()
+    mpc_config = conf.MpcConfig(
+        alg_conf,
+        vehicle_conf,
+        sim_conf)
+    
+    cx, cy, cyaw, ck = get_switch_back_course(dl)
+    spline_points: list[SplinePoint] = []
+    for x, y, yaw, k in zip(cx, cy, cyaw, ck):
+        spline_points.append(SplinePoint(x, y, yaw, k))
+        
+    route = Route(list(spline_points))
+    path_provider = StaticPathProvider(route, dl)
+    initial_point = path_provider.get_first_spline_point()
+    if not initial_point:
+        print('ERROR: No initial point')
+        return
+    
+    state = State(initial_point.x, initial_point.y, initial_point.yaw, 0.0)
+    mpc_controller = MPCController(
+        None, # lambda msg, log_level: print(f'[{log_level.name}] {msg}'),
+        mpc_config,
+        path_provider)
+    
+    rt = 0
+    while time.time() - start < 1000000 and rt < 10:
+        state, action = mpc_controller.next_action(state)
+        if action:
+            rt = 0
+            print(f'ACTION!: {action}')
+        else:
+            rt += 1
+            
+    print('OUT!')
 
 def main2():
+    """
     print(__file__ + " start!!")
     start = time.time()
 
@@ -173,7 +159,8 @@ def main2():
 
     if show_animation:  # pragma: no cover
         init_plot(cx, cy, t, x, y, v)
-
+    """
+    pass
 
 if __name__ == '__main__':
     main()
