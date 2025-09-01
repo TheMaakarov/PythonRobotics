@@ -37,9 +37,10 @@ class VehicleConfig:
     
 @dataclass
 class SimulationConfig:
-    SHOW_ANIMATION: bool = True  # Show animation
-    DETECTION_DISTANCE = 20.0 # [m]
-    COURSE_TICK = 1.0  # [m] Course tick for path provider
+    SHOW_ANIMATION: bool = True # Show vehicle animation
+    SHOW_ERR_STATS: bool = True # Show deviation error statistics
+    DETECTION_DISTANCE: float = 20.0 # [m]
+    COURSE_TICK: float = 1.0  # [m] Course tick for path provider
 
 
 @dataclass
@@ -47,3 +48,7 @@ class MpcConfig:
     algorithm: AlgorithmConfig
     vehicle: VehicleConfig
     simulation: SimulationConfig
+
+    @staticmethod
+    def default() -> "MpcConfig":
+        return MpcConfig(AlgorithmConfig(), VehicleConfig(), SimulationConfig())

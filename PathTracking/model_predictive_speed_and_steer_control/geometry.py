@@ -22,10 +22,6 @@ class SplinePoint(Pos2D):
 
     yaw: float
     curvature: float
-    is_final: bool = False
-
-    def to_final(self):
-        return SplinePoint(self.x, self.y, self.yaw, self.curvature, True)
 
 @dataclass(frozen=False)
 class State(Pos2D):
@@ -92,8 +88,7 @@ class Route:
                 x=next_point.x,
                 y=next_point.y,
                 yaw=next_yaw,
-                curvature=next_point.curvature,
-                is_final=next_point.is_final)
+                curvature=next_point.curvature)
             smooth_path.add_point(soft_point)
         
         return smooth_path

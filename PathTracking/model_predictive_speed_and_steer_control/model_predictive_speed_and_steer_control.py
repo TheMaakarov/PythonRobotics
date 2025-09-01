@@ -7,14 +7,12 @@ author: Atsushi Sakai (@Atsushi_twi)
 """
 import time
 import math
-import numpy as np
 import sys
 import pathlib
 sys.path.append(str(pathlib.Path(__file__).parent.parent.parent))
 
 from PathPlanning.CubicSpline import cubic_spline_planner
 
-from mpc_plotter import init_plot, plot_state
 from mpc_controller import MPCController
 import mpc_config as conf
 from path_provider import StaticPathProvider
@@ -103,14 +101,14 @@ def main():
 
     dl = 1.0  # course tick
     alg_conf = conf.AlgorithmConfig()
-    vehicle_conf = conf.VehicleConfig(MAX_STEER=np.deg2rad(60.0), MAX_DSTEER=np.deg2rad(45.0))
+    vehicle_conf = conf.VehicleConfig()
     sim_conf = conf.SimulationConfig()
     mpc_config = conf.MpcConfig(
         alg_conf,
         vehicle_conf,
         sim_conf)
     
-    cx, cy, cyaw, ck = get_switch_back_course(dl)
+    cx, cy, cyaw, ck = get_forward_course(dl)
     spline_points: list[SplinePoint] = []
     for x, y, yaw, k in zip(cx, cy, cyaw, ck):
         spline_points.append(SplinePoint(x, y, yaw, k))
@@ -133,7 +131,7 @@ def main():
         state, action = mpc_controller.next_action(state)
         if action:
             rt = 0
-            print(f'ACTION!: {action}')
+            #print(f'ACTION!: {action}')
         else:
             rt += 1
             

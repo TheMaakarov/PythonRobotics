@@ -8,112 +8,68 @@ from collections.abc import Callable
 from mpc_config import MpcConfig
 from geometry import State, SplinePoint, Route, pi_2_pi, get_nparray_from_matrix
 from enums import LogLevel
-from movement import MpcAction
+from movement import MpcAction, MovementHistory
 from path_provider import PathProvider
-from mpc_plotter import plot_state
+from mpc_plotter import plot_car_state, plot_err_stats
 
 NpArr = npt.NDArray[np.float64]
-
-class MpcControllerHistory:
-
-    def __init__(self, initial_state: State):
-        self._states = [initial_state]
-        self._last_prediction: list[MpcAction] = []
-        self._last_target_index = 0
-        self._reached_goal = False
-        self._ticked_time = 0.0
-
-    @property
-    def ticked_time(self) -> float:
-        return self._ticked_time
-
-    @property
-    def last_target_index(self):
-        return self._last_target_index
-    
-    @last_target_index.setter
-    def last_target_index(self, value: int):
-        self._last_target_index = value
-
-    @property
-    def last_prediction(self) -> list[MpcAction]:
-        return self._last_prediction
-
-    @last_prediction.setter
-    def last_prediction(self, value: list[MpcAction]):
-        self._last_prediction = value
-
-    @property
-    def reached_goal(self) -> bool:
-        return self._reached_goal
-
-    @reached_goal.setter
-    def reached_goal(self, value: bool):
-        self._reached_goal = value
-
-    def add_state(self, state: State, time_tick: float):
-        self._states.append(state)
-        self._ticked_time += time_tick
-
-    def get_state_history(self) -> list[State]:
-        return self._states
-
 
 class MPCController:
     
     def __init__(
         self,
-        log_action: Optional[Callable[[str, LogLevel], None]],
         mpc_config: MpcConfig,
         path_provider: PathProvider):
         
-        self._log_action = log_action
+        self._log_action: Optional[Callable[[str, LogLevel], None]] = None
         self._mpc_config = mpc_config
         self._path_provider = path_provider
         
         # We save a reference of the actual path to avoid losing resolution when smoothing it
         self._raw_route = Route(spline_points=[])
         self._smooth_route = Route(spline_points=[])
-        self._history: MpcControllerHistory = None # type: ignore
+        self._history: MovementHistory = None # type: ignore
+        
+    def bind_log_action(self, log_action: Callable[[str, LogLevel], None]):
+        self._log_action = log_action
         
     def log(self, message: str, log_level: LogLevel):
         if self._log_action is None:
             return
         self._log_action(message, log_level)
     
-    def next_action(self, car_state: State) -> tuple[State, Optional[MpcAction]]:
+    def next_action(self, car_state: Optional[State]) -> tuple[State, Optional[MpcAction]]:
         
-        self._initialize_mpc()
+        first_state = self._initialize_mpc()
+        if not car_state:
+            car_state = first_state
         
+        if not car_state:
+            self.log('Unexpected case without any initial state', LogLevel.Error)
+            return State(0, 0), None
+            
         if not self._history:
             return car_state, None
         
-        # spline_point = self._path_provider.get_next_spline_point(car_state)
+        spline_point = self._path_provider.get_next_spline_point(car_state)
            
-        # if spline_point is not None:
-        #     self._process_new_point(spline_point)
-        
-        new_points: list[SplinePoint] = []
-        while (spline_point := self._path_provider.get_next_spline_point(car_state)):
-            new_points.append(spline_point)
-        
-        if new_points:
-            self._process_new_points(new_points)
+        if spline_point is not None:
+            self._process_new_point(spline_point)
         
         next_action_values = self._iterate_next_action(car_state)
         self.log(f'Calculated next action: {next_action_values}', LogLevel.Info)
         predicted_state = self._history.get_state_history()[-1]
         return predicted_state, next_action_values
 
-    def _initialize_mpc(self):
+    def _initialize_mpc(self) -> Optional[State]:
         
         if self._history:
-            return
+            return None
         
         first_point = self._path_provider.get_first_spline_point()
 
         if first_point is None:
-            return
+            return None
         
         first_state = State(first_point.x, first_point.y, first_point.yaw, v=0.0)
 
@@ -123,9 +79,16 @@ class MPCController:
         elif first_state.yaw - first_point.yaw <= -math.pi:
             first_state.yaw += math.pi * 2.0
 
-        self._history = MpcControllerHistory(first_state)
+        self._history = MovementHistory(first_state)
         self._process_new_points([first_point])
+        return first_state
 
+    def _process_new_point(self, spline_point: SplinePoint):
+        self._raw_route.add_point(spline_point)
+        self._smooth_route = self._raw_route.get_smooth_path()
+        self.log(f'New point added: {spline_point}', LogLevel.Debug)
+        self._speed_profile = self._calc_path_speed_profile(self._smooth_route)
+        
     def _process_new_points(self, spline_points: list[SplinePoint]):
         for spline_point in spline_points:
             self._raw_route.add_point(spline_point)
@@ -183,13 +146,17 @@ class MPCController:
             self._history.reached_goal = True
             self.log("Goal reached!", LogLevel.Info)
 
-        if self._mpc_config.simulation.SHOW_ANIMATION: # pragma: no cover
+        v_config = self._mpc_config.vehicle
+        s_config = self._mpc_config.simulation
+        state_history = self._history.get_state_history()
+        if s_config.SHOW_ANIMATION: # pragma: no cover
             course_x, course_y, _, _ = self._smooth_route.get_spline_data()
-            state_history = self._history.get_state_history()
             states_x, states_y = zip(*[(st.x, st.y) for st in state_history])
             time = self._history.ticked_time
-            config = self._mpc_config.vehicle
-            plot_state(config, course_x, course_y, state, time, states_x, states_y, target_ind, xref, ox, oy, top_action.steering_angle)
+            plot_car_state(s_config, v_config, course_x, course_y, state, time, states_x, states_y, target_ind, xref, ox, oy, top_action.steering_angle)
+        
+        if s_config.SHOW_ERR_STATS:
+            plot_err_stats(self._history, self._smooth_route, s_config)
 
         return top_action
 
@@ -410,7 +377,7 @@ class MPCController:
 
         travel = 0.0
 
-        for i in range(algorithm_config.T + 1):
+        for i in range(1, algorithm_config.T + 1):
             travel += abs(state.v) * algorithm_config.DT
             dind = int(round(travel / dl))
 
@@ -433,9 +400,6 @@ class MPCController:
         
         goal = self._smooth_route.spline_points[-1]
         
-        if not goal.is_final:
-            return False
-        
         nind = len(self._history.get_state_history())
         
         goal_dis = self._mpc_config.algorithm.GOAL_DIS
@@ -453,10 +417,7 @@ class MPCController:
 
         isstop = (abs(state.v) <= stop_speed)
 
-        if isgoal and isstop:
-            return True
-
-        return False
+        return isgoal and isstop
 
     def _calc_path_speed_profile(self, route: Route) -> list[float]:
         cx, cy, cyaw, _ = route.get_spline_data()
