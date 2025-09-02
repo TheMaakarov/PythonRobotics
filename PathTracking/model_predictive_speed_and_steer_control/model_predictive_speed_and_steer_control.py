@@ -122,7 +122,6 @@ def main():
     
     state = State(initial_point.x, initial_point.y, initial_point.yaw, 0.0)
     mpc_controller = MPCController(
-        None, # lambda msg, log_level: print(f'[{log_level.name}] {msg}'),
         mpc_config,
         path_provider)
     

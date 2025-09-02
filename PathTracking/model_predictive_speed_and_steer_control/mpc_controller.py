@@ -57,7 +57,6 @@ class MPCController:
             self._process_new_point(spline_point)
         
         next_action_values = self._iterate_next_action(car_state)
-        self.log(f'Calculated next action: {next_action_values}', LogLevel.Info)
         predicted_state = self._history.get_state_history()[-1]
         return predicted_state, next_action_values
 
@@ -86,7 +85,7 @@ class MPCController:
     def _process_new_point(self, spline_point: SplinePoint):
         self._raw_route.add_point(spline_point)
         self._smooth_route = self._raw_route.get_smooth_path()
-        self.log(f'New point added: {spline_point}', LogLevel.Debug)
+        self.log(f'New point added: {spline_point}', LogLevel.Info)
         self._speed_profile = self._calc_path_speed_profile(self._smooth_route)
         
     def _process_new_points(self, spline_points: list[SplinePoint]):
@@ -377,7 +376,7 @@ class MPCController:
 
         travel = 0.0
 
-        for i in range(1, algorithm_config.T + 1):
+        for i in range(algorithm_config.T + 1):
             travel += abs(state.v) * algorithm_config.DT
             dind = int(round(travel / dl))
 
